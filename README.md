@@ -6,6 +6,162 @@ Every participant signs actions with MetaMask. The application does not use loca
 
 ---
 
+## Latest updates
+
+This section summarizes the current project state and all recent changes. The details below are implemented in the contracts, frontend, deployment manifest, verification scripts, portable tests, and supporting documentation.
+
+### Live-only application
+
+- Removed all local task data, simulated task storage, database-backed task state, and local-chain fallbacks.
+- The application now reads and writes only to the two active GenLayer networks: Studionet and Bradbury.
+- Selecting a network changes the GenLayer RPC, active factory, MetaMask chain, task registry, child reads, escrow reads, and every subsequent transaction.
+- Public reads work without a wallet; every state-changing action requires MetaMask.
+
+### MetaMask-only participation
+
+- Removed guest, demo, and generated browser accounts.
+- MetaMask is the identity source for creators, workers, disputes, cancellation, expiry, release, and reclaim actions.
+- Added account restoration and `accountsChanged` handling.
+- Added `wallet_switchEthereumChain` and `wallet_addEthereumChain` support.
+- Address comparisons are case-insensitive, so checksummed MetaMask addresses correctly match addresses stored by GenLayer contracts.
+- Creator and worker reads now forward the connected account to `get_task_state`, allowing both parties to view their private submission while unrelated users continue to see redacted evidence.
+
+### Active contract and frontend alignment
+
+- The frontend, deployment manifest, source archive, and live contract reads now point to one active factory per network.
+- Studionet uses `0xfB0dF18C4c55179Bb57Bbbe48AE2d61Dc282043E`.
+- Bradbury uses `0x503Bdaed62C1419516052Eb5cE55d4cE6210f67D`.
+- `contracts/task_factory.py` is byte-identical to the factory source deployed on both networks.
+- `contracts/task_verifier.py` is byte-identical to the child source embedded in both factories.
+- Live verification checks the frontend address, manifest address, deployed source hash, embedded child hash, factory self-report, release window, registry count, child binding, reward, escrow, and settlement reads.
+- Removed obsolete factory addresses from operational configuration and documentation.
+
+### Single deployment source of truth
+
+- `deployments/deployments.json` is now the authoritative deployment configuration used by the frontend.
+- Verified manifest addresses take precedence over stale hosting environment variables.
+- `.env.local` and `.env.example` are maintained as local/bootstrap configuration, not as competing deployment records.
+- `deployments/ACTIVE.md` is generated automatically from the manifest.
+- Exact deployed source is archived by source hash under `deployments/sources/`.
+
+### Safer task creation and child activation
+
+- Task creation and reward custody are handled by the same payable factory transaction.
+- The factory requires a positive reward and exact native value equal to `reward × 10^18` atto-GEN.
+- The factory validates the deadline before accepting custody.
+- New tasks start as pending custody and do not immediately enter the public board.
+- The child is deployed through a deterministic internal deployment.
+- The frontend resolves the child from the transaction result or the GenLayer triggered internal transaction.
+- The frontend waits until the child is readable before requesting activation.
+- `activate_task` verifies the child's factory, creator, and reward against the factory custody record.
+- Only successfully verified children enter `get_all_tasks`.
+- If activation is interrupted, the task page detects pending factory custody and allows the creator to retry activation.
+
+### Unresolved child recovery
+
+- Added a safety path for a child address that never materializes.
+- Pending escrow remains attributed to the creator in factory storage.
+- The creator may call `reclaim_unresolved` after the seven-day safety period.
+- Reclaim refuses if the child is reachable, preventing it from bypassing a valid task lifecycle.
+- Pending/unreachable children never appear as public board tasks.
+
+### Automatic evidence review
+
+- `submit_work` now locks the evidence and starts validator review in the same transaction.
+- The worker no longer needs a separate initial verification action after submission.
+- `request_verification` remains available for dispute re-review and retry scenarios.
+- Failed or empty evidence fetches revert the transaction and leave the task and escrow unchanged.
+- Malformed AI output never passes validation.
+- A valid AI result requires a boolean verdict, integer confidence, and non-empty reasoning.
+
+### Submission privacy
+
+- Only the creator and assigned worker can read the submitted URL and note.
+- Other users can view the task, public status, reward, and settlement state but not the private evidence.
+- The frontend forwards the viewer's MetaMask address during contract reads so role-based redaction works correctly.
+- Users who did not claim a task see a clear message that another contributor owns the work slot and the submission remains private.
+
+### Cancellation and expiry settlement
+
+- Cancellation is now a terminal state rather than reopening the task and leaving escrow locked.
+- Only the creator can cancel, and only while the task is open and unclaimed.
+- Cancelled tasks become immediately refundable to the creator.
+- Open or claimed tasks can be marked expired after their canonical deadline.
+- Expiry is permissionless, so a worker who claims and abandons a task cannot strand the reward.
+- Expired tasks become immediately refundable to the creator.
+
+### Canonical settlement
+
+- `TaskVerifier.get_settlement()` is the canonical source for settlement readiness, recipient, reason, and ready time.
+- `TaskFactory.release_funds()` reads the child settlement state before moving GEN.
+- Verified work pays the worker after the 24-hour challenge window.
+- Rejected work refunds the creator after the 24-hour challenge window.
+- Cancelled and expired tasks refund the creator immediately after entering their terminal state.
+- Anyone may trigger a ready settlement, but nobody can choose or replace the recipient.
+- The factory marks escrow released and records `paid_to` before emitting the transfer.
+- Double release is rejected.
+- The task detail page always shows the next step, challenge countdown, refund state, or release action instead of hiding progress after a verdict.
+
+### Canonical chain time
+
+- Added one `_chain_now()` helper in both contracts.
+- Creation deadlines, claim deadlines, submission deadlines, expiry, dispute cutoff, challenge windows, release guards, and unresolved-child recovery all use the GenVM-injected transaction time.
+- The browser clock is used only for display and cannot authorize an action.
+- The child exposes chain time for consistent countdown rendering.
+
+### Canonical GitHub URL validation
+
+- Replaced substring matching with parsed URL validation.
+- GitHub repository submissions require HTTPS.
+- The hostname must be exactly `github.com` or `www.github.com`.
+- User credentials, explicit custom ports, malformed ports, query-string tricks, profile-only paths, and lookalike domains are rejected.
+- A valid path must contain both repository owner and repository name.
+
+### Dispute protection
+
+- Only the creator or assigned worker may dispute a decided task.
+- Disputes are allowed only while the challenge window is still open.
+- A dispute stores its reason, clears the previous verdict timestamp, and freezes settlement.
+- Re-review fetches the evidence again and includes the dispute reason in the validator context.
+- A new verdict starts a new challenge window.
+
+### Clean user-facing dApp
+
+- The task board is now the home page.
+- Removed tutorial panels, source-code viewers, protocol walkthrough pages, local demo data, and code-like labels from the user interface.
+- Replaced internal method names and terminal-style copy with product-oriented status and action text.
+- Removed technical task IDs from board cards.
+- Added clear states for available, in progress, under review, accepted, not accepted, cancelled, expired, pending activation, challenge window, reward release, and refund.
+
+### Portable contract tests
+
+- Added a dependency-free GenVM test harness using the Python standard library.
+- The harness runs the real factory source and the actual base64-embedded child source.
+- It emulates storage, payable value, rollback, cross-contract reads, transfers, chain time, evidence fetches, AI output, child deployment, and balances.
+- The suite currently passes `23/23` tests.
+- Coverage includes wrong factory configuration, deployment failure, custody rollback, pending activation, unresolved-child recovery, cancellation, expiry, self-claim, claim stealing, unauthorized submission, lookalike GitHub hosts, failed evidence fetch, malformed AI output, disputes, evidence privacy, read consistency, full challenge settlement, refunds, recipient balance changes, and double-release protection.
+
+### Deployment verification and automation
+
+- Added `npm run verify:deployments` to compare frontend configuration with both live networks.
+- Added `npm run release:check` as the complete release gate.
+- Added network-specific artifact preparation commands.
+- Added `npm run deployment:record -- ...` to verify and record a finalized deployment with one command.
+- The deployment recorder validates the finalized transaction, factory source, embedded child, self-reported address, registry invariants, custody views, and settlement views.
+- A successful record automatically updates the manifest, source archive, `.env.local`, `.env.example`, and `deployments/ACTIVE.md`.
+- Frontend source files do not need manual factory-address edits after a recorded deployment.
+
+### Documentation and evidence
+
+- Added a complete architecture and trust-boundary document.
+- Added a requirement-to-evidence matrix.
+- Added deployment evidence and active verification records.
+- Added exact source archives for live contracts.
+- Added a Studionet lifecycle script that operates on the active factory and prints finalized hashes, before/after escrow reads, settlement recipients, and recipient balance changes.
+- The repository explicitly marks deployment hashes and funded live lifecycle evidence as unavailable when they were not supplied or cannot be produced without funded keys. No evidence is fabricated.
+
+---
+
 ## Active deployments
 
 [`deployments/deployments.json`](deployments/deployments.json) is the single deployment source used by the frontend. [`deployments/ACTIVE.md`](deployments/ACTIVE.md) is the generated human-readable table and is refreshed automatically.
@@ -326,7 +482,7 @@ Cancellation is terminal and cannot be reused to remove a worker.
 After the deadline passes, an open or claimed task can be marked expired by anyone:
 
 ```text
-open / expired claim → expired → creator refund available immediately
+open / claimed → expired → creator refund available immediately
 ```
 
 This prevents an abandoned claim from holding the reward forever.
