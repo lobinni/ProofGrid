@@ -1,27 +1,27 @@
 # ProofGrid
 
-ProofGrid là một task marketplace chạy trực tiếp trên GenLayer. Creator đăng và tài trợ task bằng GEN; worker nhận task, nộp bằng chứng; GenLayer validators đánh giá kết quả theo rubric; `TaskFactory` giữ escrow và chỉ thanh toán hoặc hoàn tiền theo trạng thái do `TaskVerifier` quyết định.
+ProofGrid is a task marketplace on GenLayer. A creator posts and funds a task with GEN; a worker claims it and submits evidence; GenLayer validators evaluate the work against its rubric; the factory settles the locked reward to the worker or refunds the creator based on the child contract's final state.
 
-Toàn bộ user tham gia bằng **MetaMask**. Ứng dụng không có tài khoản nội bộ, không lưu task trong database và không giữ private key của user.
+Every participant signs actions with MetaMask. The application does not use local accounts, does not store tasks in a private database, and never handles user private keys.
 
 ---
 
 ## Active deployments
 
-[`deployments/deployments.json`](deployments/deployments.json) là nguồn cấu hình deployment duy nhất mà frontend sử dụng. Bảng dễ đọc được sinh tự động tại [`deployments/ACTIVE.md`](deployments/ACTIVE.md).
+[`deployments/deployments.json`](deployments/deployments.json) is the single deployment source used by the frontend. [`deployments/ACTIVE.md`](deployments/ACTIVE.md) is the generated human-readable table and is refreshed automatically.
 
-| Network | Chain ID | Active `TaskFactory` | Source SHA-256 |
+| Network | Chain ID | Active `TaskFactory` | Deployed source SHA-256 |
 | --- | ---: | --- | --- |
 | GenLayer Studio / Studionet | 61999 | [`0xfB0dF18C4c55179Bb57Bbbe48AE2d61Dc282043E`](https://explorer-studio.genlayer.com/address/0xfB0dF18C4c55179Bb57Bbbe48AE2d61Dc282043E) | `c4270798e5b002f7e505e7fbf5e2793f6ff7297c4f89ccc6ee131db4a3ab3b2a` |
 | Asimov / Bradbury Testnet | 4221 | [`0x503Bdaed62C1419516052Eb5cE55d4cE6210f67D`](https://explorer-bradbury.genlayer.com/address/0x503Bdaed62C1419516052Eb5cE55d4cE6210f67D) | `c4270798e5b002f7e505e7fbf5e2793f6ff7297c4f89ccc6ee131db4a3ab3b2a` |
 
-Embedded `TaskVerifier` trên cả hai factory có SHA-256:
+Embedded `TaskVerifier` source SHA-256 on both networks:
 
 ```text
 9806f9c34da2612f73fca430c22f414bb9e1ea71b897ff001e716e600e1034ad
 ```
 
-Các file trong `contracts/` hiện byte-identical với source đang chạy trên hai mạng:
+The source in `contracts/` is byte-identical to what is deployed at both active addresses:
 
 ```text
 contracts/task_factory.py
@@ -31,24 +31,13 @@ contracts/task_verifier.py
   9806f9c34da2612f73fca430c22f414bb9e1ea71b897ff001e716e600e1034ad
 ```
 
-Xác minh trực tiếp:
+Verify the deployed source, embedded child, frontend route and factory identity:
 
 ```bash
 npm run verify:deployments
 ```
 
-Script kiểm tra:
-
-- factory frontend đang sử dụng;
-- source thực đọc từ GenLayer RPC;
-- source hash trong deployment manifest;
-- embedded child source;
-- `get_factory_address()` tự xác nhận đúng địa chỉ;
-- release window;
-- `task_count` khớp `get_all_tasks()`;
-- với từng task: child factory binding, child state, reward, escrow và settlement reads.
-
-Kết quả live hiện tại trên cả hai mạng:
+Current live verification output confirms on both networks:
 
 ```text
 source alignment: MATCH
@@ -58,13 +47,13 @@ release window: 86400 seconds
 registry count: MATCH
 ```
 
-Chi tiết: [`deployments/active-verification.md`](deployments/active-verification.md).
+Detailed output is stored in [`deployments/active-verification.md`](deployments/active-verification.md).
 
-> Hai địa chỉ được cung cấp không đi kèm deployment transaction hash. Trường `deploymentTx` vì vậy vẫn là `null` trong manifest. Dự án không tạo hoặc suy đoán transaction hash giả.
+> The factory addresses were supplied without their deployment transaction hashes. `deploymentTx` therefore remains `null` in the manifest. This repository does not fabricate hashes or infer them without verifiable data.
 
 ---
 
-## Kiến trúc
+## Architecture
 
 ```text
 MetaMask user
@@ -72,58 +61,66 @@ MetaMask user
     ▼
 Next.js frontend
     │
-    ├── selected network: Studionet hoặc Bradbury
-    │
+    ├── selected network: Studionet or Bradbury
     ▼
-TaskFactory của network
+TaskFactory on that network
     │
-    ├── giữ GEN escrow
-    ├── tạo child contract
-    ├── xác minh child trước khi đưa lên Board
-    └── thực hiện payout/refund
+    ├── holds GEN escrow
+    ├── schedules the child deployment
+    ├── activates only a readable, matching child
+    ├── keeps the public task registry
+    └── pays out or refunds the escrow
          │
          ▼
-TaskVerifier riêng của mỗi task
+TaskVerifier child (one per task)
     │
-    ├── lưu task state
-    ├── claim / submit / dispute
-    ├── bảo vệ evidence
-    ├── validator verdict
-    ├── cancel / expire
-    └── quyết định settlement
+    ├── stores task data and worker
+    ├── enforces creator/worker permissions
+    ├── stores evidence privately
+    ├── fetches and evaluates submitted work
+    ├── supports disputes
+    ├── handles cancellation, expiry and settlement state
+    └── exposes canonical chain time
 ```
 
-### Frontend
+### Frontend responsibilities
 
-Các phần chính:
+Main modules:
 
-- `src/lib/networks.ts` — đọc active factory từ deployment manifest; đổi network sẽ đổi toàn bộ read/write target.
-- `src/lib/contract.ts` — client `genlayer-js`, read/write helpers, receipt validation, child resolution và activation.
-- `src/lib/wallet.ts` — kết nối MetaMask qua EIP-1193, switch/add chain.
-- `src/contexts/WalletContext.tsx` — trạng thái wallet và network dùng chung.
-- `src/hooks/useTasks.ts` — đọc registry, child state và escrow từ mạng đang chọn.
-- `src/app/page.tsx` — Board.
-- `src/app/(app)/create/page.tsx` — tạo task và deposit reward.
-- `src/app/(app)/task/[address]/page.tsx` — claim, submit, verdict, dispute và settlement.
-- `src/app/(app)/dashboard/page.tsx` — task creator/worker theo MetaMask đang kết nối.
+- `src/lib/networks.ts` — network selection and the active factory. Verified manifest data takes precedence over stale public environment variables.
+- `src/lib/contract.ts` — `genlayer-js` clients, writes, receipt validation, embedded return decoding, child resolution and activation.
+- `src/lib/wallet.ts` — MetaMask connection through EIP-1193, including `wallet_switchEthereumChain` and `wallet_addEthereumChain`.
+- `src/contexts/WalletContext.tsx` — shared wallet and network state.
+- `src/hooks/useTasks.ts` — reads the registry, child states and escrow statuses on the selected network.
+- `src/app/page.tsx` — task board.
+- `src/app/(app)/create/page.tsx` — task creation and reward deposit.
+- `src/app/(app)/task/[address]/page.tsx` — claim, submission, verdict, dispute, expiry and settlement.
+- `src/app/(app)/dashboard/page.tsx` — creator and worker tasks for the connected account.
 
-Không có task database hoặc local task fallback. Reads đi tới GenLayer RPC; writes được MetaMask ký và gửi tới contract của network đang chọn.
+Reads can be public. Every transaction that changes contract state requires MetaMask.
+
+---
+
+## Contract roles
 
 ### `TaskFactory`
 
-`TaskFactory` được deploy một lần trên mỗi network và có các trách nhiệm:
+One factory per network. It is the only application entry point users configure.
 
-1. Nhận reward trong payable `create_task`.
-2. Kiểm tra reward dương và `msg.value == reward × 10^18` atto-GEN.
-3. Kiểm tra deadline bằng chain time.
-4. Lưu pending custody, creator và thời điểm tạo.
-5. Schedule internal child deployment.
-6. Chỉ đưa child vào public registry sau `activate_task`.
-7. Đọc settlement trực tiếp từ child trước payout/refund.
-8. Ghi `released` và `paid_to`, ngăn double-release.
-9. Cho creator reclaim pending escrow nếu child không materialize.
+Core responsibilities:
 
-Các public methods chính:
+1. Receive the reward through payable `create_task`.
+2. Require a positive reward and an attached value equal to `reward × 10^18` atto-GEN.
+3. Require a future deadline using canonical chain time.
+4. Record the creator, set creation time and retain command of the escrow while deployment is pending.
+5. Schedule a deterministic internal child deployment.
+6. Aggregate tasks **only** after the child reads successfully and matches its custody record.
+7. Verify factory binding before settlement.
+8. Cross-check child settlement before sending native GEN out of factory custody.
+9. Record `released` and `paid_to`, and prevent double release.
+10. Refund pending custody when a child never becomes readable after the safety period.
+
+Important methods:
 
 ```text
 create_task
@@ -140,17 +137,38 @@ get_factory_address
 
 ### `TaskVerifier`
 
-Mỗi task có một `TaskVerifier` riêng. Contract này quản lý:
+One child per task. It defines the task lifecycle; it does not own its escrow.
 
-- creator và factory binding;
-- mô tả, rubric, reward, deadline;
+It stores:
+
+- creator and factory binding;
+- title, description, category and priority;
+- rubric and evidence format;
+- reward and deadline;
 - assigned worker;
-- evidence URL/note;
-- validator verdict và reasoning;
-- dispute state;
-- cancellation, expiry và canonical settlement.
+- submission URL/note;
+- verdict, confidence and reasoning;
+- dispute information;
+- timestamps, cancellation and expiry state.
 
-Các public methods chính:
+Lifecycle:
+
+```text
+open
+  └── worker claims → claimed
+                      └── worker submits → submitted
+                                             └── validator verdict → verified / rejected
+                                             └── dispute → disputed → re-review
+```
+
+Terminal paths:
+
+```text
+open → cancelled
+open / claimed after deadline → expired
+```
+
+Important methods:
 
 ```text
 claim_task
@@ -165,189 +183,205 @@ get_settlement
 
 ---
 
-## Workflow đầy đủ
+## Complete participant workflow
 
-### 1. Connect MetaMask và chọn network
+### 1. Connect a wallet and choose a network
 
-1. User nhấn Connect.
-2. MetaMask trả về account được user cho phép.
-3. Khi đổi Studionet/Bradbury, ứng dụng gọi `wallet_switchEthereumChain`; nếu cần sẽ gọi `wallet_addEthereumChain`.
-4. Mọi read/write tiếp theo sử dụng factory của network đó.
+1. The user connects MetaMask.
+2. The selected account becomes the application's identity.
+3. When the user changes network, MetaMask is asked to switch to the matching GenLayer chain.
+4. All future reads and writes target the factory configured for that network.
 
-Reads có thể công khai; tất cả thay đổi state đều cần MetaMask ký.
+No account credentials are ever stored by the app.
 
-### 2. Create task và deposit reward
+### 2. Create a task and deposit the reward
 
-Creator nhập nội dung task, rubric, reward và deadline. Frontend gửi:
+The creator provides the task description, rubric, reward and deadline. The frontend sends:
 
 ```text
 create_task(...)
 value = reward × 10^18 atto-GEN
 ```
 
-Factory thực hiện:
+The factory:
 
 ```text
-validate reward + deadline
-    → record pending custody
-    → schedule deterministic child deployment
-    → return pending child address
+validates positive reward
+→ validates exact attached value
+→ validates a future chain-time deadline
+→ records the creator and pending custody
+→ schedules a deterministic child deployment
+→ returns the pending child address
 ```
 
-Child deployment trên GenLayer là asynchronous. Một deterministic address được trả về không đồng nghĩa child đã tồn tại. Vì vậy frontend tiếp tục:
+A deterministic address alone is not accepted as proof that the child already exists. The frontend then:
 
 ```text
-resolve child from receipt / triggered internal transaction
-    → poll get_task_state until child is readable
-    → verify child.factory, child.creator, child.reward
-    → call activate_task
-    → task appears on Board
+resolves the child from the receipt or triggered internal transaction
+→ polls get_task_state until the child is readable
+→ verifies child.factory, child.creator and child.reward
+→ calls activate_task
+→ the task enters the public board registry
 ```
 
-Creator có thể phải xác nhận hai giao dịch MetaMask:
+MetaMask may display two confirmations: deposit/create and activation.
 
-1. create + deposit;
-2. activate task sau khi child materialize.
+If the user leaves the page before activation, the task remains discoverable as pending and can be activated later. If the child never materialises, the creator can reclaim the escrow after the seven-day safety period, and reclaim refuses when the child is readable.
 
-Nếu user rời trang trước activation, trang pending vẫn cho phép Retry activation. Nếu child không tồn tại, creator có thể reclaim escrow sau safety period.
+### 3. Claim a task
 
-### 3. Claim task
+A worker signs `claim_task` with MetaMask.
 
-Worker gọi `claim_task` qua MetaMask. Contract từ chối khi:
+The child rejects the call if:
 
-- task không còn open;
-- caller là creator;
-- deadline đã qua;
-- task đã được worker khác nhận.
+- the task is not open;
+- the caller is the creator;
+- the deadline has passed;
+- another worker already claimed it.
 
-### 4. Submit evidence và validator verdict
+Creator self-claim is impossible.
 
-Chỉ assigned worker được submit trước deadline. `submit_work`:
+### 4. Submit evidence and trigger the validator verdict
 
-1. kiểm tra caller và task state;
-2. kiểm tra evidence URL;
-3. lưu evidence;
-4. fetch nội dung từ URL;
-5. yêu cầu GenLayer validators đánh giá theo rubric;
-6. đạt comparative consensus;
-7. chuyển trạng thái sang `verified` hoặc `rejected`.
+Only the assigned worker may submit before the deadline.
 
-Failed/empty evidence fetch làm transaction revert và escrow vẫn nằm trong factory. AI output malformed không được coi là accepted.
+`submit_work`:
+
+1. validates caller and state;
+2. validates URL format;
+3. records evidence;
+4. fetches current content from the submitted URL;
+5. runs an AI verification prompt on GenLayer;
+6. resolves the verdict through comparative consensus;
+7. stores the verdict and timestamp in-chain.
+
+A failed or empty evidence fetch reverts the transaction. The task remains claimable and the reward remains in factory custody.
+
+Malformed AI output cannot pass. A valid verdict requires:
+
+- a real boolean `verified` value;
+- an integer `confidence` value;
+- a non-empty `reasoning` string.
 
 ### 5. Evidence privacy
 
-`get_task_state()` chỉ trả evidence URL/note đầy đủ khi caller là:
+`get_task_state()` returns the full evidence URL and note only when the caller is:
 
-- creator; hoặc
-- assigned worker.
+- the creator; or
+- the assigned worker.
 
-User khác chỉ nhận private sentinel, nhưng vẫn xem được title, rubric, status, reward và public settlement state.
+Other viewers receive a private sentinel and can only see the public task, status, reward and settlement indicators.
 
-### 6. Challenge và dispute
+### 6. Challenge window and dispute
 
-Sau verdict có challenge window 24 giờ:
+A verdict does not trigger payment immediately:
 
 ```text
-verified/rejected
-    → 24h challenge window
-    → release/refund nếu không dispute
+verified / rejected
+→ 24-hour challenge window
+→ payout or refund only if there is no successful dispute
 ```
 
-Creator hoặc worker có thể dispute trước khi window đóng. Dispute:
+Before the window closes, the creator or worker may dispute with a meaningful reason. A dispute:
 
-- lưu lý do;
-- reset `verified_at`;
-- đóng băng settlement;
-- cho phép `request_verification` fetch lại evidence và đưa dispute reason vào review;
-- verdict mới bắt đầu challenge window mới.
+- stores the reason;
+- resets the verdict timestamp;
+- freezes settlement;
+- allows a fresh `request_verification`;
+- supplies the dispute reason to the re-review;
+- begins a new challenge window after the new verdict.
+
+A dispute requested after the window closes is rejected.
 
 ### 7. Settlement
 
-`TaskVerifier.get_settlement()` là nguồn quyết định canonical. `TaskFactory.release_funds()` đọc view này trước khi chuyển GEN.
+The child's `get_settlement()` view is the canonical settlement decision. The factory reads it before sending any GEN.
 
-| State | Recipient | Ready |
+| State | Recipient | When it becomes payable |
 | --- | --- | --- |
-| `verified` | worker | sau verdict 24 giờ |
-| `rejected` | creator | sau verdict 24 giờ |
-| `cancelled` | creator | ngay lập tức |
-| `expired` | creator | ngay sau expiry transition |
-| pending child unreachable | creator | sau safety period |
+| `verified` | worker | 24 hours after the verdict |
+| `rejected` | creator | 24 hours after the verdict |
+| `cancelled` | creator | immediately |
+| `expired` | creator | immediately |
+| pending child unreachable | creator | after the seven-day safety period |
 
-Bất kỳ user nào cũng có thể trigger `release_funds`, nhưng không thể thay đổi recipient. Factory xác định recipient từ child settlement, đánh dấu escrow released trước transfer và chặn double-release.
+Anyone may call `release_funds`, but nobody can choose the payout address. The contract determines the recipient, records the recipient, transfers the reward out of factory custody and prevents a second release.
 
 ---
 
-## Không để escrow bị stranded
+## Escrow cannot remain stranded
 
-### Cancellation
+### Creator cancellation
 
-Creator chỉ được cancel khi task còn open và chưa có worker:
-
-```text
-open → cancelled → refund creator
-```
-
-Cancellation là terminal; không mở lại task và không giữ reward vô thời hạn.
-
-### Expiry
-
-Sau deadline, bất kỳ user nào cũng có thể gọi `expire_task` cho task open hoặc claimed:
+The creator may cancel only before a worker claims:
 
 ```text
-open/claimed → expired → refund creator
+open → cancelled → creator refund available immediately
 ```
 
-Điều này xử lý trường hợp worker claim rồi bỏ task.
+Cancellation is terminal and cannot be reused to remove a worker.
 
-### Child deployment failure
+### Deadline expiry
 
-Pending child không được đưa lên Board trước activation. Nếu không materialize:
+After the deadline passes, an open or claimed task can be marked expired by anyone:
+
+```text
+open / expired claim → expired → creator refund available immediately
+```
+
+This prevents an abandoned claim from holding the reward forever.
+
+### Internal deployment failure
+
+A child does not enter the board until activation proves it exists and matches custody:
 
 ```text
 pending custody
-    → child remains unreachable
-    → creator reclaim after safety period
+→ child never materialises
+→ creator reclaims after the safety period
 ```
 
-`reclaim_unresolved` chỉ thành công khi caller là creator, grace period đã qua và child thực sự không đọc được.
+The refund path rejects any attempt to reclaim an address that is readable, so it is not a shortcut around a live task.
 
 ---
 
-## Canonical chain time
+## Canonical chain-time source
 
-Cả factory và child đều dùng `_chain_now()` dựa trên transaction-wide datetime do GenVM inject. Đây là nguồn thời gian dùng cho:
+Both contracts route every time guard through `_chain_now()`. GenVM injects a transaction-wide datetime into the execution environment, so validator replays observe the same canonical timestamp.
 
-- create deadline;
-- claim deadline;
-- submit deadline;
+The same source controls:
+
+- task-creation deadline validation;
+- claim deadline validation;
+- submission deadline validation;
 - expiry;
 - dispute cutoff;
-- challenge window;
-- reward release;
-- unresolved-child reclaim period.
+- 24-hour challenge window;
+- escrow release timing;
+- seven-day unresolved-child reclaim timing.
 
-Frontend có thể hiển thị countdown nhưng không có quyền quyết định action hợp lệ. Contract guard luôn là authority cuối cùng.
+The browser clock is display-only. It cannot authorize an expired task, an early release or a late dispute.
 
 ---
 
-## Canonical HTTPS GitHub validation
+## Canonical HTTPS GitHub hostname validation
 
-Task có format `GitHub Repository` chỉ chấp nhận:
+A task that expects a GitHub Repository accepts only URLs such as:
 
 ```text
 https://github.com/<owner>/<repository>
 https://www.github.com/<owner>/<repository>
 ```
 
-Contract parse URL và kiểm tra:
+The parser requires:
 
-- scheme phải là HTTPS;
-- hostname phải chính xác `github.com` hoặc `www.github.com`;
-- không userinfo;
-- không custom port;
-- path phải có owner/repository.
+- HTTPS;
+- exact hostname `github.com` or `www.github.com`;
+- no user credentials in the authority;
+- no custom port;
+- at least `/owner/repository` in the path.
 
-Các URL sau bị từ chối:
+It rejects values such as:
 
 ```text
 https://github.com.evil.tld/owner/repo
@@ -361,94 +395,96 @@ https://github.com/owner
 https://evil.tld/?next=https://github.com/owner/repo
 ```
 
-Không còn kiểm tra bằng substring.
+There is no substring-based host check.
 
 ---
 
 ## Portable contract tests
 
-Test harness dùng Python standard library, không cần local chain hoặc pytest:
+The portable suite uses only the Python standard library. No chain, node, service or pytest installation is required:
 
 ```bash
 npm run test:contracts
 npm run test:contracts:active
 ```
 
-Kết quả hiện tại:
+Current results:
 
 ```text
 23/23 passed
 ```
 
-Coverage:
+The suite covers:
 
-- wrong factory configuration/binding;
-- child deployment failure;
-- attached-value rollback và factory custody;
-- pending activation và unresolved child recovery;
-- expiry của open task;
-- expiry của abandoned claimed task;
-- terminal cancellation;
+- incorrect factory configuration and rebinding;
+- child deployment failure and attached-value rollback;
+- pending activation and child activation checks;
+- pending-task custody;
+- unreachable child and safety reclaim;
+- open cancellation;
+- abandoned claimed-task expiry;
 - creator self-claim;
 - claim stealing;
 - unauthorized submission;
-- canonical và lookalike GitHub hosts;
-- failed/empty evidence fetch;
+- canonical and lookalike GitHub hosts;
+- failed or empty evidence fetch;
 - malformed AI output;
-- disputes và late disputes;
+- dispute and late dispute;
 - evidence privacy;
-- reward/value mismatch;
-- factory/child/escrow settlement read consistency;
-- full create → activate → claim → evidence → verdict → challenge → payout/refund flow;
-- recipient balance changes và double-release protection trong test runtime.
+- reward and value mismatch;
+- matching child, factory and escrow settlement reads;
+- the complete create → activate → claim → evidence → verdict → challenge window → payout/refund flow;
+- recipient balance changes and double-release protection inside the test chain runtime.
 
-Test files:
+Files:
 
 - `contracts/tests/test_proofgrid.py`
 - `contracts/tests/genvm_stub.py`
 
 ---
 
-## Live deployment verification
+## Deployment and consistency verification
+
+Run:
 
 ```bash
 npm run verify:deployments
 ```
 
-Lệnh này đọc trực tiếp Studionet và Bradbury, so sánh:
+The verifier reads both live networks and confirms:
 
 ```text
 frontend factory
 = manifest factory
-= get_factory_address()
-= deployed source hash target
+= factory self-report
+= deployed factory source hash target
 ```
 
-Với mỗi activated task, script còn kiểm tra:
+For every activated task it additionally verifies:
 
 ```text
 child.factory == selected factory
-child.reward == factory escrow amount
-child settlement == factory settlement
+child.reward == factory locked escrow
+child settlement recipient/reason == factory settlement view
 registry length == task_count
 ```
 
-Machine-readable evidence:
+Evidence files:
 
 - `deployments/deployments.json`
 - `deployments/ACTIVE.md`
 - `deployments/active-verification.md`
-- `deployments/sources/<factory-source-hash>/`
+- `deployments/sources/<factory-source-sha256>/`
 
 ---
 
 ## Studionet lifecycle evidence
 
-Script sau sử dụng **factory active hiện tại**, không deploy factory phụ:
+The evidence script uses the active factory and does not deploy another factory:
 
 ```bash
-export CREATOR_PRIVATE_KEY=0x...  # funded Studionet wallet
-export WORKER_PRIVATE_KEY=0x...   # funded Studionet wallet
+export CREATOR_PRIVATE_KEY=0x...
+export WORKER_PRIVATE_KEY=0x...
 
 node scripts/studionet-e2e.mjs studionet \
   | tee deployments/studionet-e2e.log
@@ -457,45 +493,44 @@ node scripts/verify-deployment.mjs studionet \
   | tee deployments/studionet-verification.log
 ```
 
-Script ghi:
+It prints:
 
-- finalized transaction hash của từng action;
-- explorer link;
-- escrow trước/sau cancellation;
-- escrow trước/sau expiry;
+- finalized transaction hashes;
+- explorer links for every action;
+- escrow before/after cancellation;
+- escrow before/after expiry;
 - settlement recipient;
-- recipient balance trước/sau;
-- create, activate, claim và submit hashes;
-- validator verdict;
+- before/after recipient balances;
+- create, activate, claim, submit and verdict hashes;
 - challenge-window state.
 
-### Trạng thái evidence hiện tại
+### Evidence state at this commit
 
-Đã xác minh live trên hai mạng:
+Verified through live reads:
 
-- active factory address;
-- factory source hash;
-- embedded child source hash;
-- frontend/factory alignment;
-- factory self-report;
+- active factory addresses;
+- deployed factory source hashes;
+- embedded child source hashes;
+- frontend route and factory self-report;
 - release window;
-- registry và unknown escrow/settlement reads.
+- registry count;
+- unknown escrow and settlement reads.
 
-Chưa có trong repository:
+Not available in this repository:
 
-- finalized deployment transaction hashes của hai factory vì chúng không được cung cấp cùng địa chỉ;
-- per-task live reads trên hai factory mới vì registry đang rỗng tại thời điểm kiểm tra;
-- before/after recipient balance của lifecycle live vì sandbox không có funded private key.
+- the two factories' deployment transaction hashes, because they were not supplied with the addresses;
+- per-task live escrow/balance reads on the newly configured factories, because both registries were empty at verification time;
+- recipient balance deltas from a real lifecycle, because no funded Studionet private key exists in this sandbox.
 
-Dự án không bịa transaction hash hoặc balance evidence. Chạy script bằng funded keys và commit log để hoàn tất phần này.
+No transaction hash, amount or balance evidence has been fabricated. Funded keys and the scripts above are the legitimate path to complete this evidence.
 
-Ma trận yêu cầu: [`docs/requirements-matrix.md`](docs/requirements-matrix.md).
+Full requirement-to-evidence mapping: [`docs/requirements-matrix.md`](docs/requirements-matrix.md).
 
 ---
 
-## Cài đặt local
+## Local development
 
-Yêu cầu:
+Prerequisites:
 
 - Node.js 20+
 - npm
@@ -508,9 +543,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Frontend đọc active factory từ committed manifest. `.env.local` chỉ là bootstrap/local override khi manifest chưa có address.
-
-Các biến public:
+The frontend first reads verified active addresses from the committed manifest. Public environment variables are bootstrap fallbacks only when the manifest has no address.
 
 ```bash
 NEXT_PUBLIC_STUDIONET_FACTORY=0xfB0dF18C4c55179Bb57Bbbe48AE2d61Dc282043E
@@ -518,80 +551,80 @@ NEXT_PUBLIC_BRADBURY_FACTORY=0x503Bdaed62C1419516052Eb5cE55d4cE6210f67D
 NEXT_PUBLIC_DEFAULT_NETWORK=studionet
 ```
 
-Không đưa private key vào biến `NEXT_PUBLIC_*` hoặc Vercel frontend environment.
+Never expose private keys through `NEXT_PUBLIC_*` values or the frontend deployment environment.
 
 ---
 
 ## Release gate
 
-Chạy trước khi push hoặc deploy:
+Run before pushing or deploying:
 
 ```bash
 npm run release:check
 ```
 
-Bao gồm:
+The gate performs:
 
-1. regenerate embedded child;
-2. Python syntax check;
+1. embedded child regeneration;
+2. Python syntax compilation;
 3. 23 portable contract tests;
-4. byte-locked deployed-source tests;
-5. source hash refresh;
+4. deployed-source archive tests;
+5. source-hash refresh;
 6. ESLint;
 7. Next.js type generation;
-8. TypeScript và production build;
-9. live verification trên Studionet và Bradbury.
+8. TypeScript and production build;
+9. live verification on Studionet and Bradbury.
 
 ---
 
-## Deploy contract mới và cập nhật dự án
+## Deploying a new contract and updating the project
 
-Không sửa địa chỉ thủ công trong nhiều file. Chỉ dùng workflow dưới đây.
+Do not edit contract addresses manually in source files. Use this workflow.
 
-### 1. Sửa contract
+### 1. Change only the contracts
 
-Chỉ sửa:
+Edit:
 
 ```text
 contracts/task_verifier.py
 contracts/task_factory.py
 ```
 
-Nếu sửa child:
+After modifying the child:
 
 ```bash
 npm run hashes
 ```
 
-Lệnh này nhúng child vào factory, cập nhật hash manifest và sinh lại tài liệu deployment.
+This embeds the child into the factory, updates source hashes in the manifest and regenerates the active deployment table.
 
-### 2. Kiểm tra
+### 2. Run the release gate
 
 ```bash
 npm run release:check
 ```
 
-Lưu ý: live verification sẽ báo source mismatch sau khi source đã thay đổi nhưng chưa redeploy. Đây là fail-safe đúng thiết kế.
+If the source changed but a new factory is not yet deployed, live verification intentionally fails with a source mismatch. This is the expected fail-safe.
 
-### 3. Chuẩn bị artifact
+### 3. Prepare the artifact
 
 ```bash
 npm run deployment:prepare:studionet
 npm run deployment:prepare:bradbury
 ```
 
-Artifact:
+Artifacts:
 
 ```text
 dist/contracts/studionet/task_factory.py
 dist/contracts/bradbury/task_factory.py
 ```
 
-Deploy **chỉ factory**, không deploy child trực tiếp và không truyền constructor arguments.
+Deploy only the factory. Do not deploy the child directly and do not pass constructor arguments.
 
-### 4. Ghi nhận deployment bằng một lệnh
+### 4. Record the new deployment automatically
 
-Sau khi transaction đạt `FINALIZED`:
+After the deployment transaction reaches `FINALIZED`:
 
 ```bash
 npm run deployment:record -- \
@@ -600,7 +633,7 @@ npm run deployment:record -- \
   --tx 0x<FINALIZED_DEPLOYMENT_TX>
 ```
 
-Hoặc:
+Or for Bradbury:
 
 ```bash
 npm run deployment:record -- \
@@ -609,72 +642,72 @@ npm run deployment:record -- \
   --tx 0x<FINALIZED_DEPLOYMENT_TX>
 ```
 
-Lệnh tự động:
+This one command:
 
-1. xác minh transaction finalized và execution thành công;
-2. so source live với `contracts/task_factory.py`;
-3. so embedded child với `contracts/task_verifier.py`;
-4. kiểm tra `get_factory_address` và custody/settlement views;
-5. archive exact deployed source;
-6. cập nhật `deployments/deployments.json`;
-7. cập nhật `.env.local` và `.env.example`;
-8. sinh lại `deployments/ACTIVE.md`.
+1. verifies the transaction is finalized and successfully executed;
+2. compares the deployed factory to `contracts/task_factory.py` byte-for-byte;
+3. compares the embedded child to `contracts/task_verifier.py` byte-for-byte;
+4. verifies `get_factory_address`, custody and settlement views;
+5. archives the exact deployed source;
+6. updates `deployments/deployments.json`;
+7. refreshes `.env.local` and `.env.example`;
+8. regenerates `deployments/ACTIVE.md`.
 
-Frontend ưu tiên manifest đã xác minh, vì vậy stale Vercel env không thể ghi đè contract mới. Không cần sửa `src/lib/networks.ts` hoặc bảng README.
+The verified manifest takes precedence over stale environment variables, so the frontend cannot be silently routed back to an old factory. No `networks.ts` or README table edit is required.
 
-### 5. Xác minh lại
+### 5. Verify the deployment and rebuild
 
 ```bash
 npm run verify:deployments
 npm run release:check
 ```
 
-Commit manifest, active table và source archive rồi redeploy frontend.
+Commit the updated manifest, active table and source archive, then redeploy the frontend.
 
 ---
 
-## Các scripts quan trọng
+## Scripts
 
-| Command | Chức năng |
+| Command | Purpose |
 | --- | --- |
-| `npm run dev` | Chạy frontend local |
-| `npm run build` | Production build |
-| `npm run lint` | ESLint |
-| `npm run typecheck` | TypeScript |
-| `npm run test:contracts` | Portable contract tests |
-| `npm run test:contracts:active` | Test byte-locked source archive |
-| `npm run hashes` | Embed child và cập nhật source hashes |
-| `npm run verify:deployments` | Verify hai factory live |
-| `npm run release:check` | Chạy toàn bộ release gate |
-| `npm run deployment:prepare:studionet` | Tạo Studionet artifact |
-| `npm run deployment:prepare:bradbury` | Tạo Bradbury artifact |
-| `npm run deployment:record -- ...` | Verify và ghi nhận factory mới |
-| `npm run deployment:show` | Sinh lại bảng active deployments |
+| `npm run dev` | Start the frontend locally |
+| `npm run build` | Build the production application |
+| `npm run lint` | Run ESLint |
+| `npm run typecheck` | Run TypeScript validation |
+| `npm run test:contracts` | Run portable contract tests |
+| `npm run test:contracts:active` | Test the byte-locked deployed source archive |
+| `npm run hashes` | Embed the child and update canonical hashes |
+| `npm run verify:deployments` | Verify both active factories on-chain |
+| `npm run release:check` | Run the complete release gate |
+| `npm run deployment:prepare:studionet` | Prepare the Studionet factory artifact |
+| `npm run deployment:prepare:bradbury` | Prepare the Bradbury factory artifact |
+| `npm run deployment:record -- ...` | Verify and record a new deployment |
+| `npm run deployment:show` | Regenerate the active deployment table |
 
 ---
 
-## Tài liệu
+## Documentation
 
-- [`docs/architecture.md`](docs/architecture.md) — workflow và trust boundaries.
-- [`docs/requirements-matrix.md`](docs/requirements-matrix.md) — ma trận yêu cầu/evidence.
-- [`docs/deployment-evidence.md`](docs/deployment-evidence.md) — quy trình evidence.
-- [`docs/steward-response.md`](docs/steward-response.md) — phản hồi kỹ thuật.
-- [`deployments/ACTIVE.md`](deployments/ACTIVE.md) — bảng deployment được sinh tự động.
+- [`docs/architecture.md`](docs/architecture.md) — trust boundaries and complete workflow.
+- [`docs/requirements-matrix.md`](docs/requirements-matrix.md) — requirement-to-evidence mapping.
+- [`docs/deployment-evidence.md`](docs/deployment-evidence.md) — deployment evidence procedure.
+- [`docs/steward-response.md`](docs/steward-response.md) — technical response to review requirements.
+- [`deployments/ACTIVE.md`](deployments/ACTIVE.md) — generated active deployment table.
 
 ---
 
-## Push lên GitHub
+## Push to GitHub
 
-Trước khi commit:
+Run the gate before committing:
 
 ```bash
 npm run release:check
 git status --short
 ```
 
-Đảm bảo không có `.env.local`, private keys, `.next`, `dist` hoặc Python caches trong commit.
+Ensure `.env.local`, private keys, `.next`, `dist` and Python caches are absent from the commit.
 
-Tạo repository trống trên GitHub, sau đó:
+Create an empty GitHub repository, then:
 
 ```bash
 git init
@@ -685,14 +718,14 @@ git remote add origin https://github.com/<YOUR_USERNAME>/proofgrid.git
 git push -u origin main
 ```
 
-Nếu remote đã tồn tại:
+If the remote already exists:
 
 ```bash
 git remote set-url origin https://github.com/<YOUR_USERNAME>/proofgrid.git
 git push -u origin main
 ```
 
-Hoặc dùng GitHub CLI:
+Or use GitHub CLI:
 
 ```bash
 gh auth login
