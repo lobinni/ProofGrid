@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-05T13:13:38.805Z",
+  "source": {
+    "factoryPath": "contracts/task_factory.py",
+    "factorySha256": "c4270798e5b002f7e505e7fbf5e2793f6ff7297c4f89ccc6ee131db4a3ab3b2a",
+    "verifierPath": "contracts/task_verifier.py",
+    "verifierSha256": "9806f9c34da2612f73fca430c22f414bb9e1ea71b897ff001e716e600e1034ad",
+    "embeddedVerifierSha256": "9806f9c34da2612f73fca430c22f414bb9e1ea71b897ff001e716e600e1034ad",
+    "embeddedVerifierMatches": true,
+    "testSuite": "python3 contracts/tests/test_proofgrid.py"
+  },
+  "networks": {
+    "studionet": {
+      "label": "GenLayer Studio (Studionet)",
+      "chainId": 61999,
+      "activeFactory": "0xfB0dF18C4c55179Bb57Bbbe48AE2d61Dc282043E",
+      "activeFactorySourceSha256": "c4270798e5b002f7e505e7fbf5e2793f6ff7297c4f89ccc6ee131db4a3ab3b2a",
+      "activeVerifierSourceSha256": "9806f9c34da2612f73fca430c22f414bb9e1ea71b897ff001e716e600e1034ad",
+      "sourceArchive": "deployments/sources/c4270798e5b002f7e505e7fbf5e2793f6ff7297c4f89ccc6ee131db4a3ab3b2a",
+      "deploymentTx": null,
+      "explorer": "https://explorer-studio.genlayer.com",
+      "status": "ACTIVE_SOURCE_VERIFIED",
+      "verifiedReads": {
+        "get_factory_address": "0xfB0dF18C4c55179Bb57Bbbe48AE2d61Dc282043E",
+        "get_release_window": 86400,
+        "get_task_count": 0,
+        "get_all_tasks": [],
+        "get_escrow_status_unknown": {
+          "created_at": 0,
+          "creator": "",
+          "locked_amount": 0,
+          "paid_to": "",
+          "released": false
+        },
+        "get_settlement_status_unknown": {
+          "known": false,
+          "locked_amount": 0,
+          "ready_at": 0,
+          "reason": "unknown",
+          "recipient": "",
+          "released": false,
+          "settleable": false
+        }
+      },
+      "note": "Current live factory; deployed source and embedded child hashes match this repository."
+    },
+    "bradbury": {
+      "label": "Asimov / Bradbury Testnet",
+      "chainId": 4221,
+      "activeFactory": "0x503Bdaed62C1419516052Eb5cE55d4cE6210f67D",
+      "activeFactorySourceSha256": "c4270798e5b002f7e505e7fbf5e2793f6ff7297c4f89ccc6ee131db4a3ab3b2a",
+      "activeVerifierSourceSha256": "9806f9c34da2612f73fca430c22f414bb9e1ea71b897ff001e716e600e1034ad",
+      "sourceArchive": "deployments/sources/c4270798e5b002f7e505e7fbf5e2793f6ff7297c4f89ccc6ee131db4a3ab3b2a",
+      "deploymentTx": null,
+      "explorer": "https://explorer-bradbury.genlayer.com",
+      "status": "ACTIVE_SOURCE_VERIFIED",
+      "verifiedReads": {
+        "get_factory_address": "0x503Bdaed62C1419516052Eb5cE55d4cE6210f67D",
+        "get_release_window": 86400,
+        "get_task_count": 0,
+        "get_all_tasks": [],
+        "get_escrow_status_unknown": {
+          "created_at": 0,
+          "creator": "",
+          "locked_amount": 0,
+          "paid_to": "",
+          "released": false
+        },
+        "get_settlement_status_unknown": {
+          "known": false,
+          "locked_amount": 0,
+          "ready_at": 0,
+          "reason": "unknown",
+          "recipient": "",
+          "released": false,
+          "settleable": false
+        }
+      },
+      "note": "Current live factory; deployed source and embedded child hashes match this repository."
+    }
+  }
+}

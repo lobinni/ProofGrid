@@ -1,0 +1,33 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.*
+
+# next.js
+.next/
+out/
+build/
+
+# production / generated deployment artifacts
+*.tsbuildinfo
+next-env.d.ts
+dist/contracts/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# drizzle
+drizzle/
+
+# python
+__pycache__/
+*.pyc
+
+# misc
+.DS_Store
+*.pem
+coverage/
+.vscode/
+.idea/

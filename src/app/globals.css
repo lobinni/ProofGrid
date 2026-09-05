@@ -1,0 +1,129 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #06070a;
+  --panel: #0c0e14;
+  --panel2: #10131b;
+  --line: rgba(255, 255, 255, 0.06);
+  --line-strong: rgba(255, 255, 255, 0.13);
+  --fg: #ecedf2;
+  --muted: #9ca2b4;
+  --faint: #5c6274;
+  --accent: #b7f542;
+  --accent-hi: #d2ff6b;
+  --violet: #8b7cff;
+  --amber: #ffb224;
+  --danger: #ff6159;
+  --info: #5ad9f5;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--accent);
+  color: #000;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Blueprint grid backdrop */
+.bg-grid {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 30%, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 30%, transparent 80%);
+}
+
+/* Ambient glows */
+.bg-glow {
+  background:
+    radial-gradient(640px 340px at 12% -8%, rgba(183, 245, 66, 0.07), transparent 70%),
+    radial-gradient(720px 420px at 88% -4%, rgba(139, 124, 255, 0.08), transparent 70%),
+    radial-gradient(900px 500px at 50% 110%, rgba(90, 217, 245, 0.04), transparent 70%);
+}
+
+/* Consensus scanning beam */
+.scanline {
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(139, 124, 255, 0.12) 45%,
+    rgba(139, 124, 255, 0.22) 50%,
+    rgba(139, 124, 255, 0.12) 55%,
+    transparent 100%
+  );
+  background-size: 100% 260%;
+  animation: scan 2.2s linear infinite;
+}
+@keyframes scan {
+  0% {
+    background-position: 0 -130%;
+  }
+  100% {
+    background-position: 0 130%;
+  }
+}
+
+/* Marquee for the activity strip */
+.marquee {
+  animation: marquee 36s linear infinite;
+}
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Outlined display text */
+.text-outline {
+  -webkit-text-stroke: 1px rgba(236, 237, 242, 0.28);
+  color: transparent;
+}
+
+/* Soft pulsing dot legend */
+@keyframes ping-soft {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+.ping-soft::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: inherit;
+  animation: ping-soft 1.6s ease-out infinite;
+}

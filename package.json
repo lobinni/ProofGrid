@@ -1,0 +1,41 @@
+{
+  "name": "proofgrid",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test:contracts": "python3 contracts/tests/test_proofgrid.py",
+    "test:contracts:active": "python3 scripts/test-active-contracts.py",
+    "hashes": "python3 contracts/generate_factory.py && node scripts/update-source-hashes.mjs",
+    "verify:deployments": "node scripts/verify-deployment.mjs",
+    "release:check": "bash scripts/check-release.sh",
+    "deployment:prepare:studionet": "python3 scripts/prepare-contract-artifact.py --network studionet",
+    "deployment:prepare:bradbury": "python3 scripts/prepare-contract-artifact.py --network bradbury",
+    "deployment:record": "node scripts/record-deployment.mjs",
+    "deployment:show": "node scripts/render-deployments.mjs"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "framer-motion": "^13.1.1",
+    "genlayer-js": "^1.1.8",
+    "lucide-react": "^1.33.0",
+    "next": "16.2.6",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "tailwind-merge": "^3.6.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.1.17",
+    "@types/node": "22.19.15",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "eslint": "9.39.4",
+    "eslint-config-next": "16.2.6",
+    "postcss": "8.5.8",
+    "tailwindcss": "4.1.17",
+    "typescript": "5.9.3"
+  }
+}
